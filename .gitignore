@@ -1,0 +1,25 @@
+# Obsidian local UI state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/workspaces.json
+
+# Obsidian transient files
+.obsidian/cache/
+.obsidian/trash/
+.trash/
+
+# Downloaded community plugin bundles and local plugin state
+.obsidian/plugins/*/main.js
+.obsidian/plugins/*/styles.css
+.obsidian/plugins/*/data.json
+
+# Local Claude/Codex settings
+.claude/settings.local.json
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.temp
+~$*
