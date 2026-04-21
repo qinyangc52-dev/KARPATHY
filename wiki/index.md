@@ -14,7 +14,7 @@ updated: 2026-04-21
 
 ## 源文档摘要
 
-- [[hierarchical-whole-brain-modeling-critical-synchronization-2024]] - Myrov等人(2024)关于层次全脑建模和临界同步动力学的研究论文
+- [[hierarchical-whole-brain-modeling-critical-synchronization-2024]] - Myrov等人(2024)关于层次全脑建模和临界同步动力学的研究论文；PDF已抽取，当前摘要状态为 `needs-verification`
 
 ## 实体
 
@@ -56,8 +56,9 @@ updated: 2026-04-21
 
 ## 最近更新
 
-1. **2026-04-21** - 初始化wiki索引页面
+1. **2026-04-21** - 增强PDF抽取、长文分块和wiki健康检查流程
+2. **2026-04-21** - 初始化wiki索引页面
 
 ---
 
-*本索引由LLM自动维护。添加新页面时会自动更新。*
+*本索引由LLM维护。添加新页面时应同步更新，并运行 `python scripts/lint_wiki.py` 检查链接。*

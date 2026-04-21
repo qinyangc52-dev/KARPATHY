@@ -20,6 +20,7 @@ D:\X\Karpathy\
 │   ├── books/                # 书籍章节
 │   ├── transcripts/          # 会议记录、播客文字稿
 │   ├── images/               # 图片资源
+│   ├── extracted/            # 从PDF/长文抽取出的可摄取文本和分块缓存
 │   └── assets/               # 其他资产（视频、音频等）
 ├── wiki/                     # LLM生成和维护的wiki
 │   ├── index.md              # 内容索引（分类目录）
@@ -71,9 +72,11 @@ tags:                         # 标签
 related:                      # 相关页面
   - wiki/entities/entity1.md
   - wiki/concepts/concept1.md
-status: draft|stable|archived # 页面状态
+status: draft|stable|archived|needs-extraction|needs-verification # 页面状态
 importance: low|medium|high   # 重要性
 confidence: low|medium|high   # 信息置信度
+extraction_status: extracted|ocr-needed|failed|not-applicable # 源文本抽取状态
+evidence_policy: source-supported|inferred|background-knowledge|needs-verification # 主要证据类型
 ---
 ```
 
@@ -86,15 +89,34 @@ confidence: low|medium|high   # 信息置信度
 
 当添加新源文档时，LLM应遵循以下流程：
 
+### 0. 源文本准备（PDF和长文必须执行）
+- 对PDF、超长Markdown、超长TXT，先运行 `scripts/prepare_source.py` 生成可追溯的抽取文本和分块：
+  ```
+  python scripts/prepare_source.py raw/articles/example.pdf
+  ```
+- 普通PDF文本抽取结果保存到 `raw/extracted/`，长文分块保存到 `raw/extracted/chunks/`。
+- 如果PDF页面没有可抽取文本，必须标记 `status: needs-extraction`、`extraction_status: ocr-needed`，不要生成稳定摘要。
+- 如果抽取失败，只能创建占位页或失败记录，不能基于文件名、标题或领域常识生成完整源摘要。
+- 长文摄取必须逐块处理。每次发送给模型的内容应只包含当前chunk、必要的相邻chunk摘要、相关wiki页面摘要和目标模板，避免一次性塞入完整长文。
+- 生成最终源摘要前，先综合各chunk摘要，再写入 `wiki/sources/`。
+
 ### 1. 源文档分析
 - 读取并理解源文档内容
 - 识别关键实体、概念和主题
 - 提取主要观点、论据和证据
+- 明确每条重要结论的证据类型：
+  - `source-supported`：源文本明确支持
+  - `inferred`：从源文本合理推断
+  - `background-knowledge`：来自领域背景知识，非本文直接给出
+  - `needs-verification`：需要回到原文或外部资料核验
 
 ### 2. 创建源摘要
 - 在 `wiki/sources/` 中创建摘要页面
 - 包括：概述、关键要点、重要引用、作者信息、出版详情
 - 添加适当的标签和分类
+- 源摘要必须引用 `raw/extracted/` 中的抽取文本或chunk路径。
+- 对PDF来源，frontmatter必须包含 `source_file`、`extracted_file`、`extraction_status`。
+- 不得把 `inferred` 或 `background-knowledge` 内容伪装成原文结论。
 
 ### 3. 更新现有页面
 - 识别与源文档相关的现有wiki页面
@@ -108,6 +130,8 @@ confidence: low|medium|high   # 信息置信度
 ### 5. 更新索引和日志
 - 在 `wiki/index.md` 中添加新页面的引用
 - 在 `wiki/log.md` 中添加操作记录
+- 运行 `python scripts/lint_wiki.py` 检查frontmatter和wiki链接。
+- 每次摄取完成后提交git变更，提交信息应说明处理的源文档。
 
 ### 摄取命令示例
 ```
@@ -163,6 +187,11 @@ confidence: low|medium|high   # 信息置信度
 ### Lint命令示例
 ```
 请对wiki进行健康检查，报告问题并提出改进建议。
+```
+
+本地脚本：
+```
+python scripts/lint_wiki.py
 ```
 
 ## 索引和日志维护
@@ -270,6 +299,35 @@ if __name__ == "__main__":
         print(f"{r['file']}:{r['line']} - {r['snippet']}")
 ```
 
+### 源文本准备工具 (`scripts/prepare_source.py`)
+```bash
+# 从PDF抽取文本并按长文摄取预算分块
+python scripts/prepare_source.py raw/articles/example.pdf
+
+# 只抽取文本，不生成chunk
+python scripts/prepare_source.py raw/articles/example.pdf --no-chunks
+
+# 调整chunk大小，降低模型上下文压力
+python scripts/prepare_source.py raw/articles/example.pdf --max-chars 12000 --overlap-chars 800
+```
+
+输出约定：
+- `raw/extracted/<source>.txt`：抽取出的全文文本
+- `raw/extracted/<source>.manifest.json`：抽取方法、页数、字符数、页码映射
+- `raw/extracted/chunks/<source>/chunk-0001.md`：可逐块发送给LLM的文本块
+- `raw/extracted/chunks/<source>/manifest.json`：分块数量和参数
+
+### Wiki健康检查工具 (`scripts/lint_wiki.py`)
+```bash
+python scripts/lint_wiki.py
+python scripts/lint_wiki.py --strict
+```
+
+检查内容：
+- Markdown页面是否有frontmatter
+- Obsidian `[[wiki-link]]` 是否指向已存在页面
+- `type: source` 页面是否把未抽取/未验证内容标记为稳定状态
+
 ### 批量摄取脚本
 ```bash
 #!/bin/bash
@@ -304,6 +362,8 @@ echo "批量处理完成。"
 1. **逐步摄取**：一次处理一个源文档，保持参与
 2. **验证更新**：检查LLM对现有页面的修改
 3. **指导重点**：告诉LLM需要强调什么
+4. **证据优先**：未读取源文本时不生成完整摘要；长文必须先分块再综合
+5. **控制上下文**：优先传chunk摘要和相关页面摘要，而不是传入完整长文和完整wiki
 
 ### Wiki维护
 1. **定期Lint**：每周运行健康检查

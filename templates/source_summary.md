@@ -5,11 +5,15 @@ title: "{{源文档标题}}"
 created: {{YYYY-MM-DD}}
 updated: {{YYYY-MM-DD}}
 source_file: "{{原始文件路径}}"
+extracted_file: "{{抽取文本路径，如 raw/extracted/example.txt}}"
+extraction_status: extracted
+evidence_policy: source-supported
 author: "{{作者}}"
 publication: "{{出版信息}}"
 date_published: {{出版日期}}
 tags: []
 related: []
+status: draft
 confidence: medium
 importance: medium
 ---
@@ -17,6 +21,14 @@ importance: medium
 # {{源文档标题}}
 
 > *作者：{{作者}} | 出版：{{出版信息}} | 日期：{{出版日期}}*
+> *源文件：`{{原始文件路径}}` | 抽取文本：`{{抽取文本路径}}`*
+
+## 证据状态
+
+- **抽取状态**：{{extracted|ocr-needed|failed|not-applicable}}
+- **处理方式**：{{PDF文本抽取|OCR|Markdown直读|TXT直读}}
+- **证据边界**：本页结论应标注为 `source-supported`、`inferred`、`background-knowledge` 或 `needs-verification`。
+- **限制说明**：{{如果抽取失败、扫描页无法识别、或只处理了部分chunk，在这里明确说明。}}
 
 ## 概述
 
