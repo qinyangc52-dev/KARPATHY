@@ -2,9 +2,9 @@
 """
 Promote reviewed concept candidates into wiki/concepts/.
 
-Promotion is explicit: the script never creates concept pages unless a slug is
-passed with --promote. Generated pages are drafts and keep evidence boundaries
-clear.
+Promotion is explicit. The script refuses candidates without evidence, keeps
+curated-note evidence as raw/extracted paths, and only backfills links in
+structured relationship sections.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ STRUCTURED_LINK_HEADERS = {
     "相关页面",
     "候选拆分页",
 }
+SHORT_ALIAS_LENGTH = 4
 
 
 def read_text(path: Path) -> str:
@@ -101,20 +102,22 @@ def display_title(candidate: dict[str, Any], slug: str) -> str:
 
 def clean_context(context: str) -> str:
     context = re.sub(r"\[\[([^\]]+)\]\]", r"\1", context)
-    context = context.replace("[[", "").replace("]]", "")
-    return context
+    return context.replace("[[", "").replace("]]", "")
 
 
 def concept_page(slug: str, candidate: dict[str, Any]) -> str:
     title = display_title(candidate, slug)
     sources = source_list(candidate)
+    if not sources:
+        raise ValueError(f"{slug} has no source evidence; refusing promotion.")
+
     confidence = "medium" if int(candidate.get("evidence_count") or 0) >= 2 else "low"
     aliases = [item for item in candidate.get("aliases", []) if item != title]
     contexts = [clean_context(item) for item in candidate.get("contexts", [])[:3]]
-    context_lines = "\n".join(f"- {context}" for context in contexts) or "-"
-    alias_line = ", ".join(aliases) if aliases else "暂无"
-    first_source = sources[0] if sources else "现有信息不足"
-    source_lines = "\n".join(f"- `{source}`" for source in sources) or "-"
+    context_lines = "\n".join(f"- {context}" for context in contexts) or "- 现有信息不足。"
+    alias_lines = "\n".join(f"  - {alias}" for alias in aliases) if aliases else "  []"
+    source_lines = "\n".join(f"  - {source}" for source in sources)
+    source_body_lines = "\n".join(f"- `{source}`" for source in sources)
     brief_definition = find_definition(title, aliases, sources)
     if brief_definition:
         strict_definition = "现有来源提供了简明解释；严格定义仍需继续补充和核验。"
@@ -131,7 +134,7 @@ title: "{title}"
 created: {today()}
 updated: {today()}
 sources:
-{chr(10).join(f"  - {source}" for source in sources) if sources else "  - needs-source"}
+{source_lines}
 tags:
   - concept
 related: []
@@ -140,16 +143,16 @@ importance: medium
 confidence: {confidence}
 evidence_policy: inferred
 aliases:
-{chr(10).join(f"  - {alias}" for alias in aliases) if aliases else "  []"}
+{alias_lines}
 ---
 
 # {title}
 
-> 来源：由候选概念 `{slug}` 晋升而来。当前页面是草稿，不能把个人归纳伪装成文献结论。
+> 来源：由候选概念 `{slug}` 晋升而来。当前页面是草稿，不把个人归纳伪装成文献结论。
 
 ## 核心结论
 
-{title} 是一个候选晋升概念。当前可确认的是它在 `{first_source}` 等来源中反复出现或具有结构化知识价值；具体定义仍需继续补充和核验。
+{title} 是一个候选晋升概念。当前可确认的是它在 `{sources[0]}` 等来源中反复出现或具有结构化知识价值；具体定义仍需继续补充和核验。
 
 ## 定义
 
@@ -159,7 +162,7 @@ aliases:
 
 ## 背景
 
-该概念来自候选抽取与人工晋升流程。别名或变体：{alias_line}。
+该概念来自候选抽取与人工晋升流程。别名或变体：{", ".join(aliases) if aliases else "暂无"}。
 
 ## 关键组成
 
@@ -193,7 +196,7 @@ aliases:
 
 ## 来源
 
-{source_lines}
+{source_body_lines}
 
 ## 后续问题
 
@@ -233,6 +236,10 @@ def registry_alias_map(registry: dict[str, Any]) -> dict[str, str]:
     return mapping
 
 
+def is_unreviewed_hash_slug(slug: str, candidate: dict[str, Any]) -> bool:
+    return bool(candidate.get("needs_slug_review")) or bool(re.fullmatch(r"concept-[0-9a-f]{8}", slug))
+
+
 def promote(slug: str, candidates: dict[str, dict[str, Any]], force: bool = False) -> Path:
     if slug not in candidates:
         raise KeyError(f"Unknown candidate slug: {slug}")
@@ -241,6 +248,10 @@ def promote(slug: str, candidates: dict[str, dict[str, Any]], force: bool = Fals
         raise ValueError(
             f"{slug} is {candidate.get('suggested_type')}; use --force only after manual review."
         )
+    if is_unreviewed_hash_slug(slug, candidate) and not force:
+        raise ValueError(f"{slug} needs canonical slug review before promotion.")
+    if not source_list(candidate):
+        raise ValueError(f"{slug} has no source evidence; refusing promotion.")
 
     registry = load_yaml(REGISTRY) or {"concepts": {}}
     registry.setdefault("concepts", {})
@@ -255,12 +266,13 @@ def promote(slug: str, candidates: dict[str, dict[str, Any]], force: bool = Fals
     if concept_path.exists():
         raise FileExistsError(f"Concept page already exists: {concept_path}")
 
+    sources = source_list(candidate)
     write_text(concept_path, concept_page(slug, candidate))
     registry["concepts"][slug] = {
         "title": title,
         "aliases": sorted(set(candidate.get("aliases", []))),
         "status": "draft",
-        "sources": source_list(candidate),
+        "sources": sources,
         "promoted_from": str(DEFAULT_CANDIDATES.relative_to(REPO_ROOT)),
         "created": today(),
     }
@@ -285,11 +297,7 @@ def update_index(slug: str, title: str) -> None:
         start = match.end()
         next_header = re.search(r"^##\s+", text[start:], flags=re.MULTILINE)
         end = start + next_header.start() if next_header else len(text)
-        section = text[start:end]
-        if "当前概念页仍在重建" in section or "当前概念页处于重建" in section:
-            section = "\n\n" + bullet + "\n\n"
-        else:
-            section = section.rstrip() + "\n" + bullet + "\n\n"
+        section = text[start:end].rstrip() + "\n" + bullet + "\n\n"
         text = text[:start] + section + text[end:]
     write_text(INDEX, text)
 
@@ -305,25 +313,43 @@ def update_log(slug: str, title: str) -> None:
         write_text(LOG, text.rstrip() + "\n" + entry)
 
 
+def aliases_for_backfill(slug: str, title: str, candidate: dict[str, Any]) -> set[str]:
+    aliases = {slug, title, candidate.get("raw_name", ""), candidate.get("normalized_name", "")}
+    aliases.update(candidate.get("aliases", []))
+    return {str(alias) for alias in aliases if alias and len(str(alias)) > SHORT_ALIAS_LENGTH}
+
+
+def should_backfill(path: Path, body: str, source_refs: set[str], aliases: set[str]) -> bool:
+    rel = str(path.relative_to(REPO_ROOT)).replace("\\", "/")
+    if rel in source_refs:
+        return True
+    return any(alias in body for alias in aliases) and has_structured_link_section(body)
+
+
+def has_structured_link_section(body: str) -> bool:
+    for line in body.splitlines():
+        match = re.match(r"^##\s+(.+?)\s*$", line.strip())
+        if match and match.group(1) in STRUCTURED_LINK_HEADERS:
+            return True
+    return False
+
+
 def backfill_links(slug: str, title: str, candidate: dict[str, Any]) -> None:
     link = f"[[{slug}]]"
     sources = set(source_list(candidate))
-    aliases = {title, candidate.get("raw_name", ""), candidate.get("normalized_name", "")}
-    aliases.update(candidate.get("aliases", []))
-    aliases = {str(alias) for alias in aliases if alias}
+    aliases = aliases_for_backfill(slug, title, candidate)
 
     for path in (REPO_ROOT / "wiki").rglob("*.md"):
         if "concepts" in path.parts or path.name in {"index.md", "log.md"}:
             continue
-        rel = str(path.relative_to(REPO_ROOT))
         text = read_text(path)
         if link in text:
-            continue
-        if rel not in sources and not any(alias in text for alias in aliases):
             continue
         frontmatter, body = parse_frontmatter(text)
         page_type = str(frontmatter.get("type", ""))
         if page_type not in {"source", "entity", "topic", "synthesis"}:
+            continue
+        if not should_backfill(path, body, sources, aliases):
             continue
         related = frontmatter.get("related")
         if not isinstance(related, list):
@@ -331,6 +357,7 @@ def backfill_links(slug: str, title: str, candidate: dict[str, Any]) -> None:
         if slug not in related:
             related.append(slug)
         frontmatter["related"] = related
+        frontmatter["updated"] = today()
         body = append_structured_link(body, slug, title)
         write_text(path, write_frontmatter(frontmatter, body))
 
@@ -347,7 +374,7 @@ def append_structured_link(body: str, slug: str, title: str) -> str:
                 insert_at += 1
             break
     if insert_at is None:
-        return body.rstrip() + f"\n\n## 相关页面\n\n{line}"
+        return body
     if insert_at > 0 and lines[insert_at - 1].strip():
         line = "\n" + line
     lines.insert(insert_at, line)
@@ -360,7 +387,7 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="List promotable candidates.")
     parser.add_argument("--all", action="store_true", help="Show all concept candidates in dry-run.")
     parser.add_argument("--promote", action="append", default=[], help="Candidate slug to promote.")
-    parser.add_argument("--force", action="store_true", help="Allow promoting non-concept candidates.")
+    parser.add_argument("--force", action="store_true", help="Allow promoting non-concept or slug-review candidates.")
     args = parser.parse_args()
 
     candidates = load_candidates(Path(args.candidates))
@@ -370,9 +397,10 @@ def main() -> int:
             if item.get("suggested_type") == "concept_candidate" and (
                 args.all or item.get("decision") == "review"
             ):
+                review = ", needs slug review" if item.get("needs_slug_review") else ""
                 print(
                     f"- {slug}: {item.get('normalized_name')} "
-                    f"(evidence={item.get('evidence_count')}, decision={item.get('decision')})"
+                    f"(evidence={item.get('evidence_count')}, decision={item.get('decision')}{review})"
                 )
         if not args.promote:
             return 0

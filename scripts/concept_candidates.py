@@ -13,7 +13,6 @@ import hashlib
 import json
 import re
 import unicodedata
-from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -149,6 +148,7 @@ class Candidate:
     evidence_count: int = 0
     suggested_type: str = "concept_candidate"
     decision: str = "candidate"
+    needs_slug_review: bool = False
     aliases: set[str] = field(default_factory=set)
 
 
@@ -203,6 +203,12 @@ def slugify(name: str) -> str:
         digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:8]
         return f"concept-{digest}"
     return value or "concept"
+
+
+def needs_slug_review(name: str, slug: str) -> bool:
+    if slug in SLUG_ALIASES.values():
+        return False
+    return bool(re.search(r"[\u4e00-\u9fff]", name)) and bool(re.fullmatch(r"concept-[0-9a-f]{8}", slug))
 
 
 def title_from_tag(tag: str) -> str:
@@ -328,8 +334,11 @@ def main() -> int:
                     normalized_name=name,
                     slug=slug,
                     suggested_type=suggested_type(name),
+                    needs_slug_review=needs_slug_review(name, slug),
                 ),
             )
+            if needs_slug_review(name, slug):
+                candidate.needs_slug_review = True
             candidate.aliases.add(name)
             candidate.source_files.add(rel)
             ctx = context_for(body, name) or name

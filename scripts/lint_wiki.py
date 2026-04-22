@@ -37,6 +37,16 @@ ALLOWED_TYPES = {
 FLEETING_STATUSES = {"raw", "triaged", "promoted", "archived"}
 SOURCE_VALID_EXTRACTIONS = {"extracted", "verified"}
 CONCEPT_REGISTRY = REPO_ROOT / "wiki" / "concepts" / "_registry.yml"
+SOURCE_ALLOWED_PREFIXES = (
+    "raw/articles/",
+    "raw/papers/",
+    "raw/books/",
+    "raw/transcripts/",
+)
+NOTE_PREFIXES = (
+    "raw/notes/curated/",
+    "raw/notes/fleeting/",
+)
 TYPE_DIRECTORIES = {
     "comparison": "comparisons",
     "concept": "concepts",
@@ -84,6 +94,29 @@ def page_names(files: Iterable[Path], wiki_root: Path) -> set[str]:
         names.add(path.stem)
         names.add(path.relative_to(wiki_root).with_suffix("").as_posix())
     return names
+
+
+def normalize_path_value(value: object) -> str:
+    return str(value).strip().strip('"').replace("\\", "/")
+
+
+def list_values(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [normalize_path_value(item) for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [normalize_path_value(value)]
+    return []
+
+
+def looks_like_external_reference(value: str) -> bool:
+    return (
+        value.startswith("raw/")
+        or value.startswith("wiki/")
+        or value.startswith("http://")
+        or value.startswith("https://")
+        or "/" in value
+        or "\\" in value
+    )
 
 
 def lint(wiki_root: Path) -> List[Issue]:
@@ -135,11 +168,46 @@ def lint(wiki_root: Path) -> List[Issue]:
                         )
                     )
 
+        related = frontmatter.get("related")
+        if isinstance(related, list):
+            for item in related:
+                target = normalize_path_value(item)
+                if target and not looks_like_external_reference(target) and target not in names:
+                    issues.append(
+                        Issue(
+                            "WARN",
+                            path,
+                            1,
+                            f"related target does not exist: {target}",
+                        )
+                    )
+
         if str(frontmatter.get("type", "")).lower() == "source":
             status = str(frontmatter.get("status", "")).lower()
             extraction = str(frontmatter.get("extraction_status", "")).lower()
-            if not frontmatter.get("source_file"):
+            source_file = normalize_path_value(frontmatter.get("source_file", ""))
+            source_refs = [source_file, *list_values(frontmatter.get("sources"))]
+            if not source_file:
                 issues.append(Issue("ERROR", path, 1, "source page missing source_file"))
+            elif not source_file.startswith(SOURCE_ALLOWED_PREFIXES):
+                issues.append(
+                    Issue(
+                        "ERROR",
+                        path,
+                        1,
+                        "source_file must come from raw/articles, raw/papers, raw/books, or raw/transcripts",
+                    )
+                )
+            for ref in source_refs:
+                if ref.startswith(NOTE_PREFIXES):
+                    issues.append(
+                        Issue(
+                            "ERROR",
+                            path,
+                            1,
+                            "source pages must not reference raw/notes/curated or raw/notes/fleeting as source evidence",
+                        )
+                    )
             if not frontmatter.get("extracted_file") and not extraction:
                 issues.append(
                     Issue(
@@ -170,6 +238,8 @@ def lint(wiki_root: Path) -> List[Issue]:
             sources = frontmatter.get("sources")
             if not isinstance(sources, list) or not sources:
                 issues.append(Issue("WARN", path, 1, "concept page should list at least one source"))
+            elif any(normalize_path_value(source) == "needs-source" for source in sources):
+                issues.append(Issue("ERROR", path, 1, "concept page must not use needs-source placeholder"))
             related = frontmatter.get("related")
             if not isinstance(related, list):
                 issues.append(Issue("WARN", path, 1, "concept page related field should be a list"))
@@ -188,21 +258,17 @@ def lint(wiki_root: Path) -> List[Issue]:
     registry = read_yaml_file(CONCEPT_REGISTRY)
     concepts = registry.get("concepts", {})
     if concepts and isinstance(concepts, dict):
-        for slug, item in concepts.items():
-            status = ""
-            if isinstance(item, dict):
-                status = str(item.get("status", "")).lower()
-            if status in {"promoted", "stable"}:
-                path = wiki_root / "concepts" / f"{slug}.md"
-                if not path.exists():
-                    issues.append(
-                        Issue(
-                            "ERROR",
-                            path,
-                            1,
-                            f"registry concept is {status} but page is missing",
-                        )
+        for slug in concepts:
+            path = wiki_root / "concepts" / f"{slug}.md"
+            if not path.exists():
+                issues.append(
+                    Issue(
+                        "ERROR",
+                        path,
+                        1,
+                        "registry concept is missing its page",
                     )
+                )
 
     return issues
 
