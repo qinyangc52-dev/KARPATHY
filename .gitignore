@@ -27,3 +27,12 @@ desktop.ini
 # Python caches
 __pycache__/
 *.py[cod]
+
+# Local knowledge base contents
+# Keep source materials, personal notes, extracted text, and generated wiki pages local.
+raw/
+wiki/
+
+# Optional local exports and generated assets
+exports/
+dist/

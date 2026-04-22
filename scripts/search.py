@@ -10,7 +10,7 @@ import argparse
 import yaml
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import sys
 
 class WikiSearcher:
@@ -177,6 +177,33 @@ class WikiSearcher:
                 continue
 
         return typed_results
+
+    def find_concept_alias(self, name: str) -> Optional[Dict[str, Any]]:
+        """在概念注册表中按 canonical slug、标题或 alias 查找概念"""
+        registry_path = self.wiki_path / "concepts" / "_registry.yml"
+        if not registry_path.exists():
+            return None
+        try:
+            with open(registry_path, "r", encoding="utf-8") as f:
+                registry = yaml.safe_load(f) or {}
+        except Exception:
+            return None
+
+        query = name.strip().lower()
+        for slug, item in (registry.get("concepts") or {}).items():
+            if not isinstance(item, dict):
+                continue
+            names = {slug.lower(), str(item.get("title", "")).lower()}
+            names.update(str(alias).lower() for alias in item.get("aliases") or [])
+            if query in names:
+                return {
+                    "slug": slug,
+                    "title": item.get("title", slug),
+                    "status": item.get("status", ""),
+                    "sources": item.get("sources", []),
+                    "link": f"[[{slug}]]",
+                }
+        return None
 
     def get_stats(self) -> Dict[str, Any]:
         """获取wiki统计信息"""

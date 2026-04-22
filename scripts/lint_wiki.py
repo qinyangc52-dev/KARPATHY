@@ -36,6 +36,7 @@ ALLOWED_TYPES = {
 }
 FLEETING_STATUSES = {"raw", "triaged", "promoted", "archived"}
 SOURCE_VALID_EXTRACTIONS = {"extracted", "verified"}
+CONCEPT_REGISTRY = REPO_ROOT / "wiki" / "concepts" / "_registry.yml"
 TYPE_DIRECTORIES = {
     "comparison": "comparisons",
     "concept": "concepts",
@@ -63,6 +64,13 @@ def parse_frontmatter(text: str) -> Dict[str, object]:
     if not match or yaml is None:
         return {}
     data = yaml.safe_load(match.group(1))
+    return data if isinstance(data, dict) else {}
+
+
+def read_yaml_file(path: Path) -> Dict[str, object]:
+    if not path.exists() or yaml is None:
+        return {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     return data if isinstance(data, dict) else {}
 
 
@@ -155,6 +163,16 @@ def lint(wiki_root: Path) -> List[Issue]:
         elif str(frontmatter.get("type", "")).lower() == "entity":
             if not frontmatter.get("entity_kind"):
                 issues.append(Issue("ERROR", path, 1, "entity page missing entity_kind"))
+        elif str(frontmatter.get("type", "")).lower() == "concept":
+            for key in ("sources", "related", "evidence_policy", "status"):
+                if key not in frontmatter:
+                    issues.append(Issue("ERROR", path, 1, f"concept page missing {key}"))
+            sources = frontmatter.get("sources")
+            if not isinstance(sources, list) or not sources:
+                issues.append(Issue("WARN", path, 1, "concept page should list at least one source"))
+            related = frontmatter.get("related")
+            if not isinstance(related, list):
+                issues.append(Issue("WARN", path, 1, "concept page related field should be a list"))
         elif str(frontmatter.get("type", "")).lower() == "fleeting":
             status = str(frontmatter.get("status", "")).lower()
             if status and status not in FLEETING_STATUSES:
@@ -166,6 +184,25 @@ def lint(wiki_root: Path) -> List[Issue]:
                         f"fleeting page has unexpected status: {status}",
                     )
                 )
+
+    registry = read_yaml_file(CONCEPT_REGISTRY)
+    concepts = registry.get("concepts", {})
+    if concepts and isinstance(concepts, dict):
+        for slug, item in concepts.items():
+            status = ""
+            if isinstance(item, dict):
+                status = str(item.get("status", "")).lower()
+            if status in {"promoted", "stable"}:
+                path = wiki_root / "concepts" / f"{slug}.md"
+                if not path.exists():
+                    issues.append(
+                        Issue(
+                            "ERROR",
+                            path,
+                            1,
+                            f"registry concept is {status} but page is missing",
+                        )
+                    )
 
     return issues
 

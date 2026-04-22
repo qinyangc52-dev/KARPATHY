@@ -48,11 +48,15 @@ D:\X\Karpathy\
 │   ├── source_summary.md
 │   ├── entity_page.md
 │   ├── concept_page.md
-│   └── topic_overview.md
+│   ├── topic_overview.md
+│   ├── comparison_page.md
+│   └── synthesis_page.md
 └── scripts/
     ├── prepare_source.py
     ├── lint_wiki.py
-    └── search.py
+    ├── search.py
+    ├── concept_candidates.py
+    └── promote_concepts.py
 ```
 
 ## 通用规则
@@ -209,18 +213,21 @@ wiki/entities/
 处理流程：
 
 1. 旧笔记原样放入 `raw/notes/curated/`。
-2. 先判断笔记中的知识单元，而不是按整篇笔记机械生成一个页面。
-3. 按全局分类规则决定创建、合并或只列候选页面。
-4. 先搜索现有页面，能合并就合并，不能合并再新建。
-5. 补充来源、链接、标签和必要证据标记。
-6. 更新 `wiki/index.md` 和 `wiki/log.md`。
-7. 运行 `python scripts/lint_wiki.py`。
+2. 如果旧笔记是 PDF 或长文，可以运行 `python scripts/prepare_source.py <source-file>` 抽取文本到 `raw/extracted/`。
+3. 抽取结果只作为迁移、提炼和候选概念抽取的中间证据，不改变该输入“个人已整理笔记”的性质。
+4. 只要输入来自 `raw/notes/curated/`，不得自动创建 `wiki/sources/` 页面；输出只能按内容进入 `wiki/concepts/`、`wiki/topics/`、`wiki/synthesis/`、`wiki/comparisons/` 或 `wiki/entities/`。
+5. 先判断笔记中的知识单元，而不是按整篇笔记机械生成一个页面。
+6. 按全局分类规则决定创建、合并或只列候选页面。
+7. 先搜索现有页面，能合并就合并，不能合并再新建。
+8. 补充来源、链接、标签和必要证据标记。
+9. 更新 `wiki/index.md` 和 `wiki/log.md`。
+10. 运行 `python scripts/lint_wiki.py`。
 
 全局分类规则：
 
 | 目录 | 页面回答的问题 | 进入条件 |
 |---|---|---|
-| `wiki/sources/` | 这份外部资料说了什么？ | 输入是论文、文章、书籍章节、访谈、报告、长博客等外部资料。 |
+| `wiki/sources/` | 这份外部资料说了什么？ | 输入来自 `raw/articles/`、`raw/papers/`、`raw/books/` 或 `raw/transcripts/` 的外部资料。不得用于 `raw/notes/curated/` 中的个人已整理笔记。 |
 | `wiki/concepts/` | 这个概念、理论、机制或方法是什么？ | 内容能给出定义、边界、例子、相关概念和证据说明。 |
 | `wiki/topics/` | 这个研究方向、问题域或长期关注主题包含什么？ | 内容组织多个问题、概念、来源、实体或后续路线。 |
 | `wiki/entities/` | 这个可命名对象是谁或是什么？ | 内容核心是人物、组织、模型、数据集、软件、项目等具体实体。 |
@@ -229,7 +236,7 @@ wiki/entities/
 
 分类判定顺序：
 
-1. 外部资料优先进入 `wiki/sources/`。
+1. 来自 `raw/articles/`、`raw/papers/`、`raw/books/` 或 `raw/transcripts/` 的外部资料优先进入 `wiki/sources/`。
 2. 具体项目、模型、软件、数据集优先进入 `wiki/entities/`。
 3. 研究方向、问题域或长期关注主题进入 `wiki/topics/`。
 4. 单一可定义概念、理论、机制或方法进入 `wiki/concepts/`。
@@ -295,6 +302,102 @@ raw/notes/fleeting/
 - 不立刻变成概念页。
 - 默认低置信度，默认需要后续验证。
 
+## 概念抽取与晋升
+
+目标：让 `wiki/concepts/` 成为稳定概念节点层，而不是 tag 列表或临时术语堆。概念节点必须能通过 `[[wiki-link]]` 连接 source、entity、topic、comparison 和 synthesis 页面。
+
+### 基本角色
+
+- **candidate**：从 raw 或 wiki 页面中抽取出的候选概念，记录在 `raw/extracted/concepts/candidates.json`。candidate 不是稳定知识页。
+- **concept**：经过人工或规则确认后晋升到 `wiki/concepts/` 的稳定概念页。
+- **registry**：`wiki/concepts/_registry.yml`，记录 canonical slug、aliases、来源和晋升状态，用于避免重复概念和近义词碎片化。
+- **tag**：辅助分类，不替代 concept 页面。
+
+### 候选抽取
+
+可从以下输入抽取候选：
+
+```text
+raw/articles/
+raw/papers/
+raw/books/
+raw/transcripts/
+raw/notes/curated/
+raw/notes/fleeting/
+wiki/sources/
+wiki/entities/
+wiki/topics/
+wiki/comparisons/
+wiki/synthesis/
+```
+
+注意：`raw/notes/curated/` 可以参与候选概念抽取，但这不意味着要创建 `wiki/sources/` 页面。若候选概念来自个人已整理笔记，concept 页的 `sources` 可以直接引用 `raw/notes/curated/...` 和对应的 `raw/extracted/...` 抽取文本。
+
+运行：
+
+```bash
+python scripts/concept_candidates.py
+```
+
+输出：
+
+```text
+raw/extracted/concepts/candidates.json
+```
+
+候选记录至少包含：
+
+- `raw_name`
+- `normalized_name`
+- `slug`
+- `source_files`
+- `contexts`
+- `evidence_count`
+- `suggested_type`
+- `decision`
+
+### 规范化与去重
+
+- 统一大小写。
+- 统一空格、下划线和连字符。
+- 合并常见别名、近义词和中英文变体。
+- 已在 `_registry.yml` 中注册的 alias 不得生成新的概念页。
+- 具体项目、软件、数据集、代码仓库、复现工程优先标记为 `entity_candidate`，不得机械晋升为 concept。
+
+### 晋升条件
+
+候选概念进入 `wiki/concepts/` 前必须满足：
+
+1. 可定义，有明确边界、反例或不应混淆对象。
+2. 是稳定知识单元，而不是一次性上下文词。
+3. 至少有一个明确来源；只有单一来源时默认 `status: draft`。
+4. 不更适合进入 `entity`、`topic`、`comparison`、`synthesis` 或 `source`。
+5. 与现有 concept 和 registry alias 不重复。
+6. 能按 `templates/concept_page.md` 填写核心结论、定义、背景、关系、例子和证据边界。
+
+晋升运行：
+
+```bash
+python scripts/promote_concepts.py --dry-run
+python scripts/promote_concepts.py --promote <slug>
+```
+
+### 回填链接
+
+已晋升概念应回填到相关 wiki 页面：
+
+- 优先在“术语、概念、相关页面”“可提炼页面”“相关页面”“候选拆分页”等结构化段落中补充 `[[concept-slug]]`。
+- 不做全文盲替换，避免过度链接和误替换。
+- 同步更新页面 frontmatter 的 `related` 字段。
+- 更新 `wiki/index.md` 和 `wiki/log.md`。
+
+### 质量边界
+
+- 不把局部词语机械提升为 concept。
+- 不把具体项目、软件、数据集、模型实现误当作 concept。
+- 不伪造 source-supported 内容；证据不足时使用 `inferred` 或 `needs-verification`。
+- candidate 可以长期保留，等待更多来源或人工判断。
+
 ## 索引和日志
 
 ### `wiki/index.md`
@@ -333,6 +436,8 @@ python scripts/lint_wiki.py --strict
 - Obsidian `[[wiki-link]]` 是否指向已存在页面。
 - `type: source` 页面是否有来源文件、抽取状态和证据策略。
 - 未抽取或未验证的 source 页面不得标记为 `stable`。
+- `type: concept` 页面必须位于 `wiki/concepts/`，并包含 `sources`、`related`、`status`、`evidence_policy`。
+- `wiki/concepts/_registry.yml` 中标记为 `promoted` 或 `stable` 的概念必须有对应 Markdown 页面。
 
 ## 维护节奏
 
