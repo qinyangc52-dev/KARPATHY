@@ -1,24 +1,56 @@
-# 操作日志
-
-这是知识库的操作记录，按时间顺序排列。每个条目使用标准前缀 `## [YYYY-MM-DD HH:MM] 操作类型 | 描述` 以便于解析。
-
+---
+id: wiki-log
+type: index
+title: "Wiki 维护日志"
+created: 2026-04-21
+updated: 2026-04-22
+sources: []
+tags: []
+related: []
+status: stable
+importance: medium
+confidence: high
+evidence_policy: background-knowledge
 ---
 
-## [2026-04-21] init | 初始化知识库系统
-- 创建目录结构：`raw/`, `wiki/`, `templates/`, `scripts/`
-- 编写模式文件：`CLAUDE.md`
-- 创建初始wiki页面：`index.md`, `log.md`
+# Wiki 维护日志
 
----
+本页记录 wiki 结构、来源处理、页面迁移和 lint 状态的主要变更。
 
-## [2026-04-21 20:56] workflow | 增强PDF和长文摄取流程
-- 新增 `scripts/prepare_source.py`，用于PDF文本抽取和长文分块。
-- 新增 `scripts/lint_wiki.py`，用于frontmatter和wiki链接健康检查。
-- 新增 `requirements.txt`，声明 `PyYAML` 和 `PyMuPDF` 依赖。
-- 更新 `CLAUDE.md` 和 `templates/source_summary.md`，加入抽取状态、证据边界和长文分块规则。
-- 已处理现有PDF，生成抽取文本和6个chunk，位置在 `raw/extracted/`。
-- 将 `wiki/sources/hierarchical-whole-brain-modeling-critical-synchronization-2024.md` 标记为 `needs-verification`，等待基于chunk重新核验。
+## [2026-04-21] init | 建立知识库框架
 
----
+- 创建 `raw/`、`wiki/`、`templates/`、`scripts/`。
+- 创建基础入口页：`wiki/index.md`、`wiki/log.md`。
 
-*日志条目由LLM在每次操作后追加。使用 `grep "^## \[" log.md | tail -5` 查看最近5个操作。*
+## [2026-04-21 20:56] workflow | 增加 PDF 抽取与 wiki lint
+
+- 增加 `scripts/prepare_source.py`，用于将 PDF 等来源抽取到 `raw/extracted/`。
+- 增加 `scripts/lint_wiki.py`，用于检查 frontmatter、wiki links 和 source 页面状态。
+- 增加 `requirements.txt`。
+
+## [2026-04-22 00:00] ingest | 处理 Myrov 2024 文献
+
+- 将 Myrov 等 2024 年论文放入 `raw/articles/`。
+- 将抽取文本与 chunks 写入 `raw/extracted/`。
+- 创建文献笔记 `wiki/sources/hierarchical-whole-brain-modeling-critical-synchronization-2024.md`。
+- 更新 `wiki/index.md`。
+
+## [2026-04-22] restructure | 调整知识库页面结构
+
+- 根据 `AGENTS.md` 将 wiki 页面按 `sources/`、`entities/`、`concepts/`、`topics/`、`comparisons/`、`synthesis/` 组织。
+- 更新模板集合。
+- 清理或迁移不稳定页面。
+
+## [2026-04-22] migrate | 迁移 SPSNet 项目笔记
+
+- 输入笔记：`raw/notes/curated/SPSNet 代码项目文档.md`。
+- 将 SPSNet 复现内容整理为项目实体页 `wiki/entities/spsnet-reproduction-project.md`。
+- 将该页定位为 `entity_kind: project`，避免误放入 `topics/`。
+- 更新 `wiki/index.md`。
+
+## [2026-04-22] merge | 合并 Sleep-EDF / SPSNet 复现项目笔记
+
+- 输入笔记：`raw/notes/curated/Sleep-EDF _ SPSNet 复现项目笔记.md`。
+- 更新 `wiki/entities/spsnet-reproduction-project.md`，合并 Sleep-EDF 预处理、STFT 缓存、Baseline、BiGRU、EpochFusion-BiGRU、GraphBlock-lite 诊断和下一步路线。
+- 重写 `wiki/index.md`，保留当前稳定入口。
+- 重写 `wiki/log.md`，修正旧日志中指向 `wiki/topics/spsnet-reproduction-project.md` 的不准确记录。

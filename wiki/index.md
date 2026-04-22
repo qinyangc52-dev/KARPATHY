@@ -1,64 +1,48 @@
 ---
 id: wiki-index
 type: index
-title: Wiki索引
+title: "Wiki 索引"
 created: 2026-04-21
-updated: 2026-04-21
+updated: 2026-04-22
+sources: []
+tags: []
+related: []
+status: stable
+importance: high
+confidence: high
+evidence_policy: background-knowledge
 ---
 
-# Wiki索引
+# Wiki 索引
 
-这是知识库的中央目录。所有页面按类别组织，便于导航。
+这里是 `wiki/` 的入口页。`raw/` 保存原始材料，`templates/` 保存页面模板，`wiki/` 保存经过整理后的文献笔记、实体、概念、主题、比较和综合页。
 
-*最后更新：2026-04-21*
+## 文献笔记
 
-## 源文档摘要
-
-- [[hierarchical-whole-brain-modeling-critical-synchronization-2024]] - Myrov等人(2024)关于层次全脑建模和临界同步动力学的研究论文；PDF已抽取，当前摘要状态为 `needs-verification`
+- [[hierarchical-whole-brain-modeling-critical-synchronization-2024]] - Myrov 等 2024 年关于人脑临界同步动力学的全脑建模文献笔记。
 
 ## 实体
 
-- [[myrov-research-group]] - 专注于计算神经科学和层次全脑建模的研究团队
+- [[spsnet-reproduction-project]] - Sleep-EDF / SPSNet 睡眠分期复现工程，记录当前实现、实验结果、GraphBlock-lite 问题和下一步路线。
+
+## 主题
+
+当前没有稳定主题页。Sleep staging、PSG 睡眠分期、SNN 睡眠分期和 GraphFC 等主题可从 SPSNet 项目实体页继续抽取。
 
 ## 概念
 
-- [[criticality]] - 系统在相变点附近的行为，特征包括长程关联和尺度不变性
-- [[synchronization]] - 振荡系统调整节奏以达到协调一致的过程
-- [[whole-brain-modeling]] - 模拟整个大脑或大规模脑网络动态的计算方法
-- [[hierarchical-models]] - 具有嵌套层次结构的建模框架，信息在层次间双向流动
-- [[brain-networks]] - 由神经元、神经元群体或脑区作为节点构成的复杂网络
-- [[computational-neuroscience]] - 使用数学模型和计算机模拟理解神经系统的跨学科领域
-- [[critical-synchronization]] - 系统在临界点附近出现的同步现象，结合临界性和同步的特性
+当前概念页仍在重建。建议优先从已整理文献和 curated note 中抽取稳定概念，而不是从零散草稿直接生成。
 
-## 主题概述
+## 比较
 
-*暂无主题页面*
+当前没有稳定比较页。
 
-## 比较分析
+## 综合
 
-*暂无比较页面*
+当前没有稳定综合页。
 
-## 综合分析
+## 维护流程
 
-*暂无综合分析页面*
-
-## 页面统计
-
-| 类别 | 数量 |
-|------|------|
-| 源文档摘要 | 1 |
-| 实体页面 | 1 |
-| 概念页面 | 7 |
-| 主题概述 | 0 |
-| 比较分析 | 0 |
-| 综合分析 | 0 |
-| **总计** | **9** |
-
-## 最近更新
-
-1. **2026-04-21** - 增强PDF抽取、长文分块和wiki健康检查流程
-2. **2026-04-21** - 初始化wiki索引页面
-
----
-
-*本索引由LLM维护。添加新页面时应同步更新，并运行 `python scripts/lint_wiki.py` 检查链接。*
+- 修改 `wiki/` 后同步更新本页。
+- 修改 `wiki/` 后同步更新 `wiki/log.md`。
+- 修改完成后运行 `python scripts/lint_wiki.py`。

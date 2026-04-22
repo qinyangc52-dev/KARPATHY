@@ -1,0 +1,361 @@
+# 基于 LLM 的个人知识库模式
+
+## 概述
+
+这是一个使用大型语言模型维护个人知识库的项目。LLM 的职责不是每次查询时重新发现知识，而是把原始资料和个人笔记加工成结构化、可链接、可追溯的 Markdown wiki。
+
+系统保持三层结构：
+
+1. **原始资料 `raw/`**：外部资料、旧笔记、随笔草稿。默认不可修改。
+2. **Wiki `wiki/`**：LLM 生成和维护的结构化知识页面。
+3. **模式 `AGENTS.md`**：本文件，定义目录、模板、证据规则和工作流。
+
+核心边界：
+
+- 文献笔记不能编。
+- 已整理笔记不能重复堆。
+- 平时随笔不能直接污染稳定知识库。
+
+## 目录结构
+
+```text
+D:\X\Karpathy\
+├── AGENTS.md
+├── raw/
+│   ├── articles/
+│   ├── papers/
+│   ├── books/
+│   ├── transcripts/
+│   ├── images/
+│   ├── extracted/
+│   ├── assets/
+│   └── notes/
+│       ├── curated/      # 已整理好的旧笔记，原样保存
+│       └── fleeting/     # 平时随笔、灵感、问题、草稿
+├── wiki/
+│   ├── index.md
+│   ├── log.md
+│   ├── sources/
+│   ├── entities/
+│   ├── concepts/
+│   ├── topics/
+│   ├── comparisons/
+│   └── synthesis/
+├── templates/
+│   ├── literature_note.md
+│   ├── permanent_note.md
+│   ├── fleeting_note.md
+│   ├── source_summary.md
+│   ├── entity_page.md
+│   ├── concept_page.md
+│   └── topic_overview.md
+└── scripts/
+    ├── prepare_source.py
+    ├── lint_wiki.py
+    └── search.py
+```
+
+## 通用规则
+
+### 文件命名
+
+- 使用小写字母、数字和连字符。
+- 避免空格。
+- 示例：`artificial-intelligence.md`、`alan-turing.md`、`transformer-architecture.md`。
+
+### 页面结构
+
+每个 wiki 页面应包含：
+
+1. YAML frontmatter
+2. 标题
+3. 结构化正文
+4. 相关链接
+5. 来源或证据说明
+
+### Frontmatter 基本字段
+
+```yaml
+---
+id: unique-identifier
+type: entity|concept|topic|source|comparison|synthesis|index|fleeting
+title: ""
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+sources: []
+tags: []
+related: []
+status: draft|stable|archived|needs-extraction|needs-verification|raw|triaged|promoted
+importance: low|medium|high
+confidence: low|medium|high
+evidence_policy: source-supported|inferred|background-knowledge|needs-verification
+---
+```
+
+### 链接约定
+
+- 使用 Obsidian 风格 wiki 链接：`[[页面名称]]`。
+- 避免绝对路径。
+- 新增或更新页面时补充必要的双向链接。
+
+## 三类笔记工作流
+
+### 1. 文献笔记
+
+适用对象：
+
+- 论文
+- 学术文章
+- 技术报告
+- 书籍章节
+- 访谈文字稿
+- 长博客或长文
+
+输入位置：
+
+```text
+raw/papers/
+raw/articles/
+raw/books/
+raw/transcripts/
+```
+
+输出位置：
+
+```text
+wiki/sources/
+```
+
+目标：生成严格论文精读报告，而不是读后感。
+
+处理流程：
+
+1. 原文放入 `raw/` 对应目录。
+2. PDF 或长文必须先运行：
+
+   ```bash
+   python scripts/prepare_source.py <source-file>
+   ```
+
+3. 检查抽取结果：
+   - 成功：继续精读。
+   - 无文本：标记 `status: needs-extraction` 和 `extraction_status: ocr-needed`。
+   - 抽取失败：只能创建占位页，不能生成完整总结。
+4. 长文逐块处理，先生成 chunk 摘要，再综合为完整文献笔记。
+5. 根据文献内容更新相关概念、实体、主题页面。
+6. 更新 `wiki/index.md` 和 `wiki/log.md`。
+7. 运行 `python scripts/lint_wiki.py`。
+
+文献笔记必须包含：
+
+1. 论文标题和摘要
+2. 引言
+3. 正文部分
+4. 图片分析
+5. 结论
+6. 参考文献
+7. 补充材料
+8. Q1-Q16 学术问题回答
+9. 三个关键问题及作答
+10. 术语、概念、相关页面
+11. 证据边界与局限
+
+文献证据标签：
+
+- `source-supported`：原文明确支持。
+- `inferred`：从原文合理推断。
+- `background-knowledge`：领域背景知识。
+- `needs-verification`：需要回查原文或外部资料核验。
+
+文献笔记写作要求：
+
+- 中文 Markdown。
+- 先结论，后分析。
+- 语言直接、专业、干净。
+- 不奉承作者，不迎合用户。
+- 不写空话。
+- 对复杂概念使用简单但准确的比喻。
+- 图表、参考文献、补充材料没读到就明确说没读到。
+- 不确定就写“现有信息不足”。
+
+### 2. 已整理笔记
+
+适用对象：
+
+- 旧主题笔记
+- 课程笔记
+- 研究笔记
+- 读书整理
+- 已有结构的个人知识文档
+
+输入位置：
+
+```text
+raw/notes/curated/
+```
+
+输出位置按内容决定：
+
+```text
+wiki/concepts/
+wiki/topics/
+wiki/synthesis/
+wiki/comparisons/
+wiki/entities/
+```
+
+目标：把旧知识迁移进 wiki 网络，重点是合并、去重、补链接。
+
+处理流程：
+
+1. 旧笔记原样放入 `raw/notes/curated/`。
+2. 先判断笔记中的知识单元，而不是按整篇笔记机械生成一个页面。
+3. 按全局分类规则决定创建、合并或只列候选页面。
+4. 先搜索现有页面，能合并就合并，不能合并再新建。
+5. 补充来源、链接、标签和必要证据标记。
+6. 更新 `wiki/index.md` 和 `wiki/log.md`。
+7. 运行 `python scripts/lint_wiki.py`。
+
+全局分类规则：
+
+| 目录 | 页面回答的问题 | 进入条件 |
+|---|---|---|
+| `wiki/sources/` | 这份外部资料说了什么？ | 输入是论文、文章、书籍章节、访谈、报告、长博客等外部资料。 |
+| `wiki/concepts/` | 这个概念、理论、机制或方法是什么？ | 内容能给出定义、边界、例子、相关概念和证据说明。 |
+| `wiki/topics/` | 这个研究方向、问题域或长期关注主题包含什么？ | 内容组织多个问题、概念、来源、实体或后续路线。 |
+| `wiki/entities/` | 这个可命名对象是谁或是什么？ | 内容核心是人物、组织、模型、数据集、软件、项目等具体实体。 |
+| `wiki/comparisons/` | 这些对象如何比较？ | 内容明确比较两个或多个理论、方法、模型、工具或路线，并有比较维度。 |
+| `wiki/synthesis/` | 多个来源综合后形成什么判断？ | 内容是跨来源的个人判断、框架、假设或综合观点。 |
+
+分类判定顺序：
+
+1. 外部资料优先进入 `wiki/sources/`。
+2. 具体项目、模型、软件、数据集优先进入 `wiki/entities/`。
+3. 研究方向、问题域或长期关注主题进入 `wiki/topics/`。
+4. 单一可定义概念、理论、机制或方法进入 `wiki/concepts/`。
+5. 明确二元或多元对比进入 `wiki/comparisons/`。
+6. 跨多个来源形成的个人判断、框架或假设进入 `wiki/synthesis/`。
+7. 内容不足以支撑独立页面时，只在主页面列为“候选拆分页”，不要生成空页。
+
+拆分原则：
+
+- 一篇旧笔记可以生成一个主页面，也可以拆成多个页面，但每个页面必须有足够内容承担自己的类型。
+- 具体工程、软件、数据集、模型实现和复现项目默认先按 `entity` 处理；相关研究方向另建 `topic`。
+- 关键词出现不等于创建概念页；只有能写清定义、边界和证据时才创建 `concept`。
+- 两个术语同时出现不等于创建比较页；只有存在明确比较维度时才创建 `comparison`。
+- 个人判断可以进入 `synthesis`，但必须明确区分来源支持、合理推断、背景知识和待验证内容。
+
+处理原则：
+
+- 已整理笔记是二级来源，不是论文原文。
+- 不把个人理解伪装成文献结论。
+- 不全文搬运，重点是结构化和网络化。
+- 可拆分，也可合并，目标是减少重复页面。
+
+### 3. 平时随笔
+
+适用对象：
+
+- 灵感
+- 临时想法
+- 研究直觉
+- 日常问题
+- 阅读感想
+- 没想清楚的草稿
+
+输入位置：
+
+```text
+raw/notes/fleeting/
+```
+
+目标：低摩擦捕捉，定期提炼，不急着进入 wiki。
+
+处理流程：
+
+1. 快速写入 `raw/notes/fleeting/`。
+2. 文件名使用日期加短标题，例如：
+
+   ```text
+   2026-04-22-brain-criticality-question.md
+   ```
+
+3. 只记录最少信息：原始想法、触发来源、为什么可能重要、相关页面、下一步处理。
+4. 每周提炼一次：
+   - 无价值：保留原处。
+   - 一句话有价值：补到已有 wiki 页面。
+   - 观点成形：进入 `wiki/synthesis/`。
+   - 形成研究问题：进入 `wiki/topics/` 或待研究问题页。
+5. 只有随笔被提炼进入 `wiki/` 后，才更新索引和日志并运行 lint。
+
+处理原则：
+
+- 不要求证据充分。
+- 不要求结构漂亮。
+- 不立刻变成概念页。
+- 默认低置信度，默认需要后续验证。
+
+## 索引和日志
+
+### `wiki/index.md`
+
+- 文献摄取后，索引加入 `wiki/sources/`。
+- 已整理笔记迁移后，索引加入对应的 `concepts/`、`topics/`、`synthesis/`、`comparisons/` 或 `entities/`。
+- 随笔只有被提炼进入 `wiki/` 后才加入索引。
+
+### `wiki/log.md`
+
+记录正式摄取、迁移、提炼和 lint 修复。
+
+日志条目格式：
+
+```text
+## [YYYY-MM-DD HH:MM] 操作类型 | 描述
+```
+
+## Lint 流程
+
+每次修改 `wiki/` 后运行：
+
+```bash
+python scripts/lint_wiki.py
+```
+
+定期严格检查：
+
+```bash
+python scripts/lint_wiki.py --strict
+```
+
+检查重点：
+
+- Markdown 页面是否有 frontmatter。
+- Obsidian `[[wiki-link]]` 是否指向已存在页面。
+- `type: source` 页面是否有来源文件、抽取状态和证据策略。
+- 未抽取或未验证的 source 页面不得标记为 `stable`。
+
+## 维护节奏
+
+### 每次处理后
+
+只要修改 `wiki/`，固定做三件事：
+
+1. 更新 `wiki/index.md`。
+2. 更新 `wiki/log.md`。
+3. 运行 `python scripts/lint_wiki.py`。
+
+### 每周
+
+- 提炼 `raw/notes/fleeting/`。
+- 检查 `needs-verification` 页面。
+- 合并重复概念。
+- 更新主题页。
+- 运行 `python scripts/lint_wiki.py --strict`。
+
+### 每月
+
+- 整理 `wiki/synthesis/`。
+- 生成月度知识总结。
+- 检查高频概念是否需要主题页。
+- 检查文献笔记是否需要升级为稳定状态。
+- 回看随笔中反复出现的问题，形成研究方向。

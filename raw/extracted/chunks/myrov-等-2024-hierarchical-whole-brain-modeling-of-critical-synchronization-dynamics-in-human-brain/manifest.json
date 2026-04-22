@@ -1,8 +1,8 @@
 {
   "source_extracted": "D:\\X\\Karpathy\\raw\\extracted\\myrov-等-2024-hierarchical-whole-brain-modeling-of-critical-synchronization-dynamics-in-human-brain.txt",
   "chunk_dir": "D:\\X\\Karpathy\\raw\\extracted\\chunks\\myrov-等-2024-hierarchical-whole-brain-modeling-of-critical-synchronization-dynamics-in-human-brain",
-  "chunk_count": 6,
-  "max_chars": 18000,
-  "overlap_chars": 1200,
-  "created": "2026-04-21T20:55:12"
+  "chunk_count": 10,
+  "max_chars": 12000,
+  "overlap_chars": 800,
+  "created": "2026-04-21T21:10:12"
 }

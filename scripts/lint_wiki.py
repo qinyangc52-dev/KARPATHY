@@ -24,6 +24,26 @@ except ImportError:  # pragma: no cover - handled at runtime
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+ALLOWED_TYPES = {
+    "comparison",
+    "concept",
+    "entity",
+    "fleeting",
+    "index",
+    "source",
+    "synthesis",
+    "topic",
+}
+FLEETING_STATUSES = {"raw", "triaged", "promoted", "archived"}
+SOURCE_VALID_EXTRACTIONS = {"extracted", "verified"}
+TYPE_DIRECTORIES = {
+    "comparison": "comparisons",
+    "concept": "concepts",
+    "entity": "entities",
+    "source": "sources",
+    "synthesis": "synthesis",
+    "topic": "topics",
+}
 
 
 @dataclass
@@ -69,6 +89,30 @@ def lint(wiki_root: Path) -> List[Issue]:
         requires_frontmatter = path.name != "log.md"
         if requires_frontmatter and not frontmatter:
             issues.append(Issue("ERROR", path, 1, "missing or invalid frontmatter"))
+        elif frontmatter:
+            page_type = str(frontmatter.get("type", "")).strip().lower()
+            if page_type and page_type not in ALLOWED_TYPES:
+                issues.append(
+                    Issue(
+                        "WARN",
+                        path,
+                        1,
+                        f"unknown page type: {page_type}",
+                    )
+                )
+            expected_dir = TYPE_DIRECTORIES.get(page_type)
+            if expected_dir:
+                rel_parts = path.relative_to(wiki_root).parts
+                actual_dir = rel_parts[0] if len(rel_parts) > 1 else ""
+                if actual_dir != expected_dir:
+                    issues.append(
+                        Issue(
+                            "ERROR",
+                            path,
+                            1,
+                            f"type '{page_type}' page must live under wiki/{expected_dir}/",
+                        )
+                    )
 
         for line_number, line in enumerate(text.splitlines(), start=1):
             for match in re.finditer(r"\[\[([^\]|#]+)", line):
@@ -83,16 +127,43 @@ def lint(wiki_root: Path) -> List[Issue]:
                         )
                     )
 
-        if frontmatter.get("type") == "source":
+        if str(frontmatter.get("type", "")).lower() == "source":
             status = str(frontmatter.get("status", "")).lower()
             extraction = str(frontmatter.get("extraction_status", "")).lower()
-            if status == "stable" and extraction not in {"extracted", "verified"}:
+            if not frontmatter.get("source_file"):
+                issues.append(Issue("ERROR", path, 1, "source page missing source_file"))
+            if not frontmatter.get("extracted_file") and not extraction:
+                issues.append(
+                    Issue(
+                        "ERROR",
+                        path,
+                        1,
+                        "source page missing extracted_file or extraction_status",
+                    )
+                )
+            if not frontmatter.get("evidence_policy"):
+                issues.append(Issue("ERROR", path, 1, "source page missing evidence_policy"))
+            if status == "stable" and extraction not in SOURCE_VALID_EXTRACTIONS:
                 issues.append(
                     Issue(
                         "ERROR",
                         path,
                         1,
                         "source page is stable but extraction_status is not extracted/verified",
+                    )
+                )
+        elif str(frontmatter.get("type", "")).lower() == "entity":
+            if not frontmatter.get("entity_kind"):
+                issues.append(Issue("ERROR", path, 1, "entity page missing entity_kind"))
+        elif str(frontmatter.get("type", "")).lower() == "fleeting":
+            status = str(frontmatter.get("status", "")).lower()
+            if status and status not in FLEETING_STATUSES:
+                issues.append(
+                    Issue(
+                        "WARN",
+                        path,
+                        1,
+                        f"fleeting page has unexpected status: {status}",
                     )
                 )
 
